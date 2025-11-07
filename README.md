@@ -24,3 +24,5 @@ Simple guide on how to use `Decision Dice`
       dice for larger numbers
     * Dice bounces when colliding with borders
     * Borders also light up when dice collides into it
+
+---
