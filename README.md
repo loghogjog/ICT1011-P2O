@@ -10,7 +10,7 @@ Simple guide on how to use `Subway Surfer`
 
 * This page is just for testing purposes and will be removed.
 
-* Press either top left or right button to move between each option and press either bottom left or right button to select that option.
+* Press either bottom left or right button to move between each option and press either top left or right button to select that option.
 
 ### Subway Surfer
 
