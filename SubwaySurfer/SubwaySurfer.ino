@@ -1,6 +1,6 @@
 #include <Wire.h>
 #include <TinyScreen.h>
-#include "SubwaySurferGame.h"
+#include "SubwaySurfer.h"
 
 TinyScreen display = TinyScreen(TinyScreenDefault);
 
@@ -53,27 +53,26 @@ void drawMenu() {
 void readMenuButtons() {
   uint8_t buttons = display.getButtons(TSButtonUpperLeft | TSButtonUpperRight | TSButtonLowerLeft | TSButtonLowerRight);
 
-  if (buttons & TSButtonUpperLeft) {
+  if (buttons & TSButtonLowerLeft) {
     currentSelection--;
     if (currentSelection < 0) currentSelection = GAME_COUNT - 1;
   }
-  if (buttons & TSButtonUpperRight) {
+  if (buttons & TSButtonLowerRight) {
     currentSelection++;
     if (currentSelection >= GAME_COUNT) currentSelection = 0;
   }
 
-  if (buttons & (TSButtonLowerLeft | TSButtonLowerRight)) {
+  if (buttons & (TSButtonUpperLeft | TSButtonUpperRight)) {
     inGame = true;
   }
 }
 
 void loop() {
-  static int lastSelection = -1; // track last menu selection
+  static int lastSelection = -1; 
 
   if (!inGame) {
     readMenuButtons();
 
-    // Only redraw if selection changed
     if (currentSelection != lastSelection) {
       drawMenu();
       lastSelection = currentSelection;
@@ -102,7 +101,7 @@ void loop() {
     }
 
     inGame = false;
-    lastSelection = -1; // force redraw on return
+    lastSelection = -1;
   }
 }
 

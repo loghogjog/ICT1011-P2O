@@ -5,5 +5,7 @@
 
 void setupSubwaySurfer(TinyScreen &display);
 void runSubwaySurfer(TinyScreen &display, bool &exitToMenu);
+void showGameOver();
+void waitForButton(bool &exitToMenu);
 
 #endif
