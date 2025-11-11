@@ -1,0 +1,11 @@
+Arduino IDE 2.3.6
+
+Library Manager:
+Install TinyScreen (v 1.1.0) Library
+
+Boards Manager:
+Install TinyCircuits SAMD Boards (v 1.1.0)
+
+External:
+Install TinyCircuits BMA250 (github file)
+Sketch --> Include Library --> Add .ZIP Library
