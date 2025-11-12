@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <string.h>
 
-TinyScreen display = TinyScreen(0);
+TinyScreen display = TinyScreen(TinyScreenPlus);
 
 // ---------------- Colors (RGB565) ----------------
 static inline uint16_t RGB565(uint8_t r, uint8_t g, uint8_t b){

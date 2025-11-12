@@ -1,8 +1,15 @@
+/*
+  TinyZero + TinyScreen (96x64) — Spin The Wheel
+  - UL Subtract, UR Add, LR Spin / Stop
+
+  Requires: TinyScreen library by TinyCircuits
+*/
+
 #include <Wire.h>
 #include <SPI.h>
 #include <TinyScreen.h>
 
-TinyScreen display = TinyScreen(TinyScreenPlus);  // OK on TinyScreen/TinyZero
+TinyScreen display = TinyScreen(TinyScreenPlus);
 
 // -------- Colors (RGB565) --------
 static inline uint16_t RGB565(uint8_t r, uint8_t g, uint8_t b){
@@ -125,7 +132,7 @@ void drawWheel(uint8_t N, int8_t showIdx){
   uint8_t idx = sectorIndexAtPointer(wheelAngle, N);
   uint8_t centerNum = (showIdx>0) ? (uint8_t)showIdx : idx;
 
-  // 2. DRAW AS FAST AS POSSIBLE
+  // 2. Draw the wheel
   // Use drawRect to clear just the background, it is often faster than clearScreen()
   display.drawRect(0, 0, SCR_W, SCR_H, 1, COL_BG);
 
@@ -219,7 +226,7 @@ void setup(){
   Wire.begin();
   display.begin();
   display.setFlip(0);
-  display.setBrightness(10); // Lower brightness to save power during fast redraws
+  display.setBrightness(10); 
   randomSeed(analogRead(0));
   wheelAngle = thetaForSectorAtTop(value, maxN);
   drawWheel(maxN, -1);
@@ -230,5 +237,4 @@ void loop(){
   updateSpin();
   int8_t showIdx = spinning ? (int8_t)sectorIndexAtPointer(wheelAngle, maxN) : (int8_t)value;
   drawWheel(maxN, showIdx);
-  // DELAY REMOVED FOR SPEED
 }
