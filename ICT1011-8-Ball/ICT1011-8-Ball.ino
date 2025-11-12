@@ -1,205 +1,348 @@
+/*
+  TinyZero + TinyScreen (96x64) — Magic 8 Ball
+  - UL Reset, UR Ask (shake then answer), LR Theme (Classic <-> Inverted)
+
+  Requires: TinyScreen library by TinyCircuits
+*/
+
 #include <Wire.h>
 #include <SPI.h>
 #include <TinyScreen.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 
-TinyScreen display = TinyScreen(TinyScreenPlus);
+TinyScreen display = TinyScreen(0);
 
-// -------- RGB565 helper --------
+// ---------------- Colors (RGB565) ----------------
 static inline uint16_t RGB565(uint8_t r, uint8_t g, uint8_t b){
   return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
+const uint16_t COL_WHITE       = RGB565(255,255,255);
+const uint16_t COL_RING_DIM    = RGB565(150,170,200);
+const uint16_t COL_TEXT_LIGHT  = RGB565(230,234,245);
+const uint16_t COL_TEXT_DARK   = RGB565(30,30,40);
 
-// -------- Colors --------
-uint16_t COL_BG   = RGB565(0,0,0);          // true black background
-uint16_t COL_FG   = RGB565(255,255,255);    // white lines/text
-uint16_t COL_DIM  = RGB565(150,150,170);    // dim outer ring
-uint16_t COL_TRI  = RGB565(60,125,255);     // blue triangle (classic)
-uint16_t COL_TRI_INV = RGB565(220,60,50);   // red triangle (inverted)
+// High-contrast triangle fills + text shadows
+const uint16_t COL_TRI_CLASSIC = RGB565(16,40,96);     // deep navy for Classic
+const uint16_t COL_TRI_INVERT  = RGB565(250,220,120);  // light gold for Inverted
+const uint16_t COL_SHADOW_DARK  = RGB565(10,10,14);
+const uint16_t COL_SHADOW_LIGHT = RGB565(235,240,255);
 
-// -------- Screen geometry --------
-const uint8_t W=96, H=64;
-const uint8_t CX=W/2, CY=H/2;
+// theme
+enum Theme { Classic=0, Inverted=1 };
+Theme theme = Classic;
 
-// -------- Buttons --------
+// -------------- Tiny 5x7 transparent font ---------------
+// ASCII 32..90 subset (space..'Z'). Each glyph 5 columns x 7 rows, MSB top.
+const uint8_t FONT5x7[][5] = {
+  // 32 ' ' .. 47 '/'
+  {0x00,0x00,0x00,0x00,0x00}, // ' '
+  {0x00,0x00,0x5F,0x00,0x00}, // '!'
+  {0x00,0x07,0x00,0x07,0x00}, // '"'
+  {0x14,0x7F,0x14,0x7F,0x14}, // '#'
+  {0x24,0x2A,0x7F,0x2A,0x12}, // '$'
+  {0x23,0x13,0x08,0x64,0x62}, // '%'
+  {0x36,0x49,0x55,0x22,0x50}, // '&'
+  {0x00,0x05,0x03,0x00,0x00}, // '''
+  {0x00,0x1C,0x22,0x41,0x00}, // '('
+  {0x00,0x41,0x22,0x1C,0x00}, // ')'
+  {0x14,0x08,0x3E,0x08,0x14}, // '*'
+  {0x08,0x08,0x3E,0x08,0x08}, // '+'
+  {0x00,0x50,0x30,0x00,0x00}, // ','
+  {0x08,0x08,0x08,0x08,0x08}, // '-'
+  {0x00,0x60,0x60,0x00,0x00}, // '.'
+  {0x20,0x10,0x08,0x04,0x02}, // '/'
+
+  // 48 '0' .. '9'
+  {0x3E,0x51,0x49,0x45,0x3E}, // 0
+  {0x00,0x42,0x7F,0x40,0x00}, // 1
+  {0x42,0x61,0x51,0x49,0x46}, // 2
+  {0x21,0x41,0x45,0x4B,0x31}, // 3
+  {0x18,0x14,0x12,0x7F,0x10}, // 4
+  {0x27,0x45,0x45,0x45,0x39}, // 5
+  {0x3C,0x4A,0x49,0x49,0x30}, // 6
+  {0x01,0x71,0x09,0x05,0x03}, // 7
+  {0x36,0x49,0x49,0x49,0x36}, // 8
+  {0x06,0x49,0x49,0x29,0x1E}, // 9
+
+  // 58 ':' .. 64 '@'
+  {0x00,0x36,0x36,0x00,0x00}, // ':'
+  {0x00,0x56,0x36,0x00,0x00}, // ';'
+  {0x08,0x14,0x22,0x41,0x00}, // '<'
+  {0x14,0x14,0x14,0x14,0x14}, // '='
+  {0x00,0x41,0x22,0x14,0x08}, // '>'
+  {0x02,0x01,0x51,0x09,0x06}, // '?'
+  {0x32,0x49,0x79,0x41,0x3E}, // '@'
+
+  // 65 'A' .. 90 'Z'
+  {0x7E,0x11,0x11,0x11,0x7E}, // A
+  {0x7F,0x49,0x49,0x49,0x36}, // B
+  {0x3E,0x41,0x41,0x41,0x22}, // C
+  {0x7F,0x41,0x41,0x22,0x1C}, // D
+  {0x7F,0x49,0x49,0x49,0x41}, // E
+  {0x7F,0x09,0x09,0x09,0x01}, // F
+  {0x3E,0x41,0x49,0x49,0x7A}, // G
+  {0x7F,0x08,0x08,0x08,0x7F}, // H
+  {0x00,0x41,0x7F,0x41,0x00}, // I
+  {0x20,0x40,0x41,0x3F,0x01}, // J
+  {0x7F,0x08,0x14,0x22,0x41}, // K
+  {0x7F,0x40,0x40,0x40,0x40}, // L
+  {0x7F,0x02,0x0C,0x02,0x7F}, // M
+  {0x7F,0x04,0x08,0x10,0x7F}, // N
+  {0x3E,0x41,0x41,0x41,0x3E}, // O
+  {0x7F,0x09,0x09,0x09,0x06}, // P
+  {0x3E,0x41,0x51,0x21,0x5E}, // Q
+  {0x7F,0x09,0x19,0x29,0x46}, // R
+  {0x46,0x49,0x49,0x49,0x31}, // S
+  {0x01,0x01,0x7F,0x01,0x01}, // T
+  {0x3F,0x40,0x40,0x40,0x3F}, // U
+  {0x1F,0x20,0x40,0x20,0x1F}, // V
+  {0x7F,0x20,0x18,0x20,0x7F}, // W
+  {0x63,0x14,0x08,0x14,0x63}, // X
+  {0x07,0x08,0x70,0x08,0x07}, // Y
+  {0x61,0x51,0x49,0x45,0x43}  // Z
+};
+
+void drawChar5x7(int x, int y, char c, uint16_t col){
+  if(c < 32 || c > 90) c = '?';
+  const uint8_t* g = FONT5x7[c - 32];
+  for (uint8_t cx=0; cx<5; cx++){
+    uint8_t colBits = g[cx];
+    for (uint8_t cy=0; cy<7; cy++){
+      if (colBits & (1 << cy)){
+        display.drawPixel(x + cx, y + cy, col);
+      }
+    }
+  }
+}
+inline int textWidth5x7_fast(const char* s){
+  size_t n = strlen(s);
+  return n ? (int)(n*6 - 1) : 0; // 5 px glyph + 1 px spacing, minus last gap
+}
+void drawString5x7(int x, int y, const char* s, uint16_t col){
+  int cx=x; for(const char* p=s; *p; ++p){ drawChar5x7(cx,y,*p,col); cx+=6; }
+}
+void drawString5x7_shadow(int x, int y, const char* s, uint16_t fg, uint16_t sh){
+  drawString5x7(x+1, y+1, s, sh); // 1 px shadow
+  drawString5x7(x,   y,   s, fg);
+}
+
+// ---------------- Answers ----------------
+const char* ANSWERS[] = {
+  "IT IS CERTAIN","IT IS DECIDEDLY SO","WITHOUT A DOUBT","YES DEFINITELY",
+  "YOU MAY RELY ON IT","AS I SEE IT YES","MOST LIKELY","OUTLOOK GOOD",
+  "YES","SIGNS POINT TO YES","REPLY HAZY TRY AGAIN","ASK AGAIN LATER",
+  "BETTER NOT TELL YOU NOW","CANNOT PREDICT NOW","CONCENTRATE AND ASK AGAIN",
+  "DON'T COUNT ON IT","MY REPLY IS NO","MY SOURCES SAY NO",
+  "OUTLOOK NOT SO GOOD","VERY DOUBTFUL"
+};
+const uint8_t N_ANS = sizeof(ANSWERS)/sizeof(ANSWERS[0]);
+
+// -------------- State --------------
+bool shaking=false;
+uint32_t shakeStart=0;
+uint16_t shakeDur=800;
+uint8_t ansIdx=0;
+
+// -------------- Fast primitives --------------
+void ringFast(int cx, int cy, int r, uint16_t col){
+  int x = r, y = 0, err = 1 - r;
+  while (x >= y){
+    display.drawPixel(cx + x, cy + y, col);
+    display.drawPixel(cx + y, cy + x, col);
+    display.drawPixel(cx - y, cy + x, col);
+    display.drawPixel(cx - x, cy + y, col);
+    display.drawPixel(cx - x, cy - y, col);
+    display.drawPixel(cx - y, cy - x, col);
+    display.drawPixel(cx + y, cy - x, col);
+    display.drawPixel(cx + x, cy - y, col);
+    y++;
+    if (err < 0) err += 2*y + 1;
+    else { x--; err += 2*(y - x) + 1; }
+  }
+}
+
+static inline int xAtY(int x1,int y1,int x2,int y2,int y){
+  if (y2 == y1) return x1;
+  return x1 + (int)((int32_t)(x2 - x1) * (y - y1) / (y2 - y1));
+}
+
+void fillTriangleFast(int ax,int ay,int bx,int by,int cx,int cy,uint16_t col){
+  if (ay > by){ int t=ay; ay=by; by=t; t=ax; ax=bx; bx=t; }
+  if (by > cy){ int t=by; by=cy; cy=t; t=bx; bx=cx; cx=t; }
+  if (ay > by){ int t=ay; ay=by; by=t; t=ax; ax=bx; bx=t; }
+
+  for (int y = ay; y <= by; ++y){
+    int xl = xAtY(ax,ay,bx,by,y);
+    int xr = xAtY(ax,ay,cx,cy,y);
+    if (xl > xr){ int t=xl; xl=xr; xr=t; }
+    display.drawLine(xl, y, xr, y, col);
+  }
+  for (int y = by; y <= cy; ++y){
+    int xl = xAtY(bx,by,cx,cy,y);
+    int xr = xAtY(ax,ay,cx,cy,y);
+    if (xl > xr){ int t=xl; xl=xr; xr=t; }
+    display.drawLine(xl, y, xr, y, col);
+  }
+}
+
+// Word wrap into up to 3 lines inside a max width
+uint8_t wrapLines(const char* src, char out[3][22], uint8_t maxLines, int maxWidth){
+  char buf[96]; strncpy(buf, src, sizeof(buf)-1); buf[sizeof(buf)-1]=0;
+  uint8_t lines=0;
+  char* token = strtok(buf, " ");
+  char line[64]; line[0]=0;
+
+  while (token){
+    char tryLine[64];
+    if (line[0]==0) {
+      strncpy(tryLine, token, sizeof(tryLine)-1); tryLine[sizeof(tryLine)-1]=0;
+    } else {
+      snprintf(tryLine, sizeof(tryLine), "%s %s", line, token);
+      tryLine[sizeof(tryLine)-1]=0;
+    }
+    if (textWidth5x7_fast(tryLine) <= maxWidth){
+      strncpy(line, tryLine, sizeof(line)-1); line[sizeof(line)-1]=0;
+    } else {
+      if (lines < maxLines){
+        strncpy(out[lines], line, 21); out[lines][21]=0;
+        lines++; line[0]=0;
+        strncpy(line, token, sizeof(line)-1); line[sizeof(line)-1]=0;
+      }
+    }
+    token = strtok(NULL, " ");
+  }
+  if (line[0] && lines < maxLines){
+    strncpy(out[lines], line, 21); out[lines][21]=0; lines++;
+  }
+  return lines;
+}
+
+// -------------- Shake --------------
+const int8_t SIN32[32] = {
+   0,  8, 16, 23, 29, 33, 36, 38,
+  39, 38, 36, 33, 29, 23, 16,  8,
+   0, -8,-16,-23,-29,-33,-36,-38,
+ -39,-38,-36,-33,-29,-23,-16, -8
+};
+
+void startShake(){
+  shaking = true; shakeStart = millis();
+}
+void updateShake(){
+  uint32_t t = millis() - shakeStart;
+  if (t >= shakeDur){
+    shaking = false;
+    ansIdx = random(N_ANS);
+    drawAnswer();
+    return;
+  }
+
+  // Smooth, decaying wobble
+  const uint8_t speedPhase = 4; 
+  uint8_t phase = (uint8_t)((t * speedPhase) >> 5) & 31;
+
+  const int16_t maxAmp = 8;  
+  const int16_t minAmp = 2;   
+  int16_t amp = maxAmp - (int32_t)(maxAmp - minAmp) * t / shakeDur;
+
+  int dx = (amp * SIN32[phase]) / 40;
+  int dy = (amp * SIN32[(phase + 8) & 31]) / 40;
+
+  // Parallax for inner window/8
+  int inx = -dx / 2;
+  int iny = -dy / 2;
+
+  display.clearScreen();
+  ringFast(48 + dx, 32 + dy, 26, COL_RING_DIM);
+  ringFast(48 + inx, 26 + iny, 11,
+           (theme==Classic)? RGB565(210,220,235) : RGB565(40,40,40));
+  uint16_t eightCol = (theme==Classic)? COL_TEXT_LIGHT : COL_TEXT_DARK;
+  drawChar5x7(48 - 3 + inx, 26 - 3 + iny, '8', eightCol);
+}
+
+// -------------- Draw screens --------------
+void drawIdle(){
+  display.clearScreen();
+  ringFast(48,32,26, COL_RING_DIM);
+  ringFast(48,26,11, (theme==Classic)? RGB565(210,220,235) : RGB565(40,40,40));
+  uint16_t eightCol = (theme==Classic)? COL_TEXT_LIGHT : COL_TEXT_DARK;
+  drawChar5x7(48-3, 26-3, '8', eightCol);
+}
+
+void drawAnswer(){
+  display.clearScreen();
+
+  // outer ring
+  ringFast(48,32,26, COL_RING_DIM);
+
+  // triangle points
+  int ax=48, ay=16;          // top
+  int bx=24, by=48;          // bottom-left
+  int cx=72, cy=48;          // bottom-right
+
+  // theme-aware triangle fill and outline
+  uint16_t triCol     = (theme==Classic)? COL_TRI_CLASSIC : COL_TRI_INVERT;
+  uint16_t triOutline = (theme==Classic)? COL_WHITE      : COL_TEXT_DARK;
+
+  fillTriangleFast(ax,ay,bx,by,cx,cy, triCol);
+  display.drawLine(ax,ay,bx,by,triOutline);
+  display.drawLine(ax,ay,cx,cy,triOutline);
+  display.drawLine(bx,by,cx,cy,triOutline);
+
+  // wrap and draw text with shadow for readability
+  char lines[3][22]; for (int i=0;i<3;i++) lines[i][0]=0;
+  uint8_t L = wrapLines(ANSWERS[ansIdx], lines, 3, 60);
+
+  int blockH = L * 8; // 7 px glyph + 1 px gap
+  int y0 = 32 - blockH/2;
+
+  uint16_t textFG = (theme==Classic)? COL_TEXT_LIGHT : COL_TEXT_DARK;
+  uint16_t textSH = (theme==Classic)? COL_SHADOW_DARK: COL_SHADOW_LIGHT;
+
+  for (uint8_t i=0; i<L; ++i){
+    int w = textWidth5x7_fast(lines[i]);
+    int x = 48 - w/2;
+    int y = y0 + i*8;
+    drawString5x7_shadow(x, y, lines[i], textFG, textSH);
+  }
+}
+
+// -------------- Buttons --------------
 #define BTN_UL TSButtonUpperLeft
 #define BTN_UR TSButtonUpperRight
 #define BTN_LL TSButtonLowerLeft
 #define BTN_LR TSButtonLowerRight
 
-// -------- State --------
-bool showAnswer=false, shaking=false, inverted=false;
-uint32_t shakeStart=0;
-const uint32_t SHAKE_MS=650;
-uint8_t ansIndex=0;
+uint8_t readButtons(){ return display.getButtons(); }
 
-const char* ANSWERS[] = {
-  "It is certain","It is decidedly so","Without a doubt","Yes, definitely",
-  "You may rely on it","As I see it, yes","Most likely","Outlook good",
-  "Yes","Signs point to yes","Reply hazy, try again","Ask again later",
-  "Better not tell you now","Cannot predict now","Concentrate and ask again",
-  "Don't count on it","My reply is no","My sources say no",
-  "Outlook not so good","Very doubtful"
-};
-
-// ---------- tiny draw helpers (no GFX) ----------
-void clear(uint16_t col){
-  display.clearScreen(); // clears to black; if you want another color, fill manually
-  if(col != RGB565(0,0,0)){
-    for(uint8_t y=0;y<H;y++) for(uint8_t x=0;x<W;x++) display.drawPixel(x,y,col);
-  }
-}
-
-void drawCircleOutline(int cx,int cy,int r,uint16_t col){
-  // Bresenham
-  int x=0, y=r, d=3-2*r;
-  auto P=[&](int px,int py){ display.drawPixel(px,py,col); };
-  while(y>=x){
-    P(cx+x,cy-y); P(cx-x,cy-y); P(cx+x,cy+y); P(cx-x,cy+y);
-    P(cx+y,cy-x); P(cx-y,cy-x); P(cx+y,cy+x); P(cx-y,cy+x);
-    x++;
-    if(d>0){ y--; d += 4*(x-y)+10; } else { d += 4*x+6; }
-  }
-}
-
-static inline int edge(int x1,int y1,int x2,int y2,int px,int py){
-  return (px-x1)*(y2-y1) - (py-y1)*(x2-x1);
-}
-
-void fillTriangle(int x1,int y1,int x2,int y2,int x3,int y3,uint16_t col){
-  int minX = min(x1,min(x2,x3)), maxX = max(x1,max(x2,x3));
-  int minY = min(y1,min(y2,y3)), maxY = max(y1,max(y2,y3));
-  for(int y=minY;y<=maxY;y++){
-    for(int x=minX;x<=maxX;x++){
-      int e1 = edge(x1,y1,x2,y2,x,y);
-      int e2 = edge(x2,y2,x3,y3,x,y);
-      int e3 = edge(x3,y3,x1,y1,x,y);
-      if((e1>=0 && e2>=0 && e3>=0) || (e1<=0 && e2<=0 && e3<=0)){
-        display.drawPixel(x,y,col);
-      }
-    }
-  }
-}
-
-void drawText(const char* s,int x,int y,uint16_t fg,uint16_t bg){
-  display.fontColor(fg, bg);   // IMPORTANT: set background to black so glyphs are readable
-  display.setCursor(x,y);
-  display.print(s);
-}
-
-// simple word-wrap into up to 3 lines of ~13 chars for 96x64
-void drawWrappedCentered(const char* msg, uint16_t fg, uint16_t bg){
-  // copy to buffer we can edit
-  char buf[64]; strncpy(buf, msg, sizeof(buf)-1); buf[sizeof(buf)-1]='\0';
-  const int maxChars=13, maxLines=3;
-  const char* p = buf;
-  char lines[3][22]; int lc=0;
-
-  while(*p && lc<maxLines){
-    int len=0, lastSpace=-1;
-    while(p[len] && len<maxChars){ if(p[len]==' ') lastSpace=len; len++; }
-    int take = (p[len]=='\0'||len==maxChars)? len : (lastSpace>=0? lastSpace : len);
-    strncpy(lines[lc], p, take); lines[lc][take]='\0';
-    p += take;
-    while(*p==' ') p++;
-    lc++;
-  }
-
-  int lineH=8;
-  int totalH = lc*lineH;
-  int y0 = CY - totalH/2;
-  for(int i=0;i<lc;i++){
-    int w = strlen(lines[i])*6;                      // 6x8 default font width
-    int x = CX - w/2;
-    drawText(lines[i], x, y0 + i*lineH, fg, bg);
-  }
-}
-
-// ---------- screens ----------
-void drawIdle(){
-  clear(COL_BG);
-  drawCircleOutline(CX, CY, 30, COL_DIM);
-  drawCircleOutline(CX, CY, 29, COL_FG);
-  drawText("8", CX-3, CY-4, COL_FG, COL_BG);        // small centered “8”
-}
-
-void drawAnswer(){
-  clear(inverted ? COL_BG : COL_BG);                // both cases keep black background
-  // ball outline
-  drawCircleOutline(CX, CY, 30, COL_DIM);
-  drawCircleOutline(CX, CY, 29, COL_FG);
-
-  // answer triangle touching top & base inside ring
-  int ax=CX,   ay=CY-18;
-  int bx=CX-24,by=CY+16;
-  int cx=CX+24,cy=CY+16;
-  fillTriangle(ax,ay,bx,by,cx,cy, inverted ? COL_TRI_INV : COL_TRI);
-  // triangle outline
-  display.drawLine(ax,ay,bx,by,COL_FG);
-  display.drawLine(bx,by,cx,cy,COL_FG);
-  display.drawLine(cx,cy,ax,ay,COL_FG);
-
-  // wrapped, centered text in white
-  drawWrappedCentered(ANSWERS[ansIndex], COL_FG, COL_BG);
-}
-
-void drawShake(){
-  // simple wobble transform: redraw idle but offset slightly
-  clear(COL_BG);
-  // wobble center
-  uint32_t t = millis() - shakeStart;
-  int dx = (int)(sinf(t*0.045f)*2.0f);
-  int dy = (int)(cosf(t*0.052f)*2.0f);
-  // ball outline with offset
-  drawCircleOutline(CX+dx, CY+dy, 30, COL_DIM);
-  drawCircleOutline(CX+dx, CY+dy, 29, COL_FG);
-  drawText("8", CX-3+dx, CY-4+dy, COL_FG, COL_BG);
-}
-
-// ---------- input & main loop ----------
+// -------------- Arduino --------------
 void setup(){
   Wire.begin();
   display.begin();
   display.setFlip(0);
-  display.setBrightness(15);
-  display.clearScreen();
+  display.setBrightness(12);   // lower avoids flicker
   randomSeed(analogRead(0));
   drawIdle();
 }
 
-void handleButtons(){
-  static uint8_t last=0;
-  uint8_t b = display.getButtons();
-
-  // UL = reset
-  if(!(last & BTN_UL) && (b & BTN_UL)){
-    shaking=false; showAnswer=false; drawIdle();
-  }
-  // UR = ask (shake then reveal)
-  if(!(last & BTN_UR) && (b & BTN_UR)){
-    if(!shaking){
-      ansIndex = random(0, (int)(sizeof(ANSWERS)/sizeof(ANSWERS[0])));
-      shaking = true; showAnswer=false; shakeStart = millis();
-    }
-  }
-  // LR = theme toggle (classic/inverted visual for triangle color only)
-  if(!(last & BTN_LR) && (b & BTN_LR)){
-    inverted = !inverted;
-    if(showAnswer) drawAnswer(); else drawIdle();
-  }
-
-  last = b;
-}
-
 void loop(){
-  handleButtons();
+  uint8_t b = readButtons();
 
-  if(shaking){
-    if(millis() - shakeStart >= SHAKE_MS){
-      shaking=false; showAnswer=true; drawAnswer();
-    }else{
-      drawShake();
-    }
+  if (b & BTN_UR){           // Ask -> shake, then answer
+    if (!shaking){ startShake(); }
   }
-  // small frame delay
-  delay(16);
+  if (b & BTN_UL){           // Reset
+    shaking=false; drawIdle();
+  }
+  if (b & BTN_LR){           // Theme toggle
+    theme = (theme==Classic)? Inverted : Classic;
+    if (!shaking) drawIdle();
+    delay(200); // debounce
+  }
+
+  if (shaking) updateShake();
+
+  delay(16); // ~60 fps pacing
 }
