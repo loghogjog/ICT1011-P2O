@@ -4,14 +4,18 @@
 #include "Maze.h"
 #include "DecisionDice.h"
 #include "8Ball.h"
+#include "Shooting.h"
+#include "SpinTheWheel.h"
 
-TinyScreen display = TinyScreen(TinyScreenDefault);
+TinyScreen display = TinyScreen(TinyScreenPlus);
 
 enum GameSelection {
   GAME_SUBWAY_SURFER,
   GAME_MAZE,
   GAME_DECISION_DICE,
   GAME_8_BALL,
+  GAME_SHOOTING,
+  GAME_SPINTHEWHEEL,
   GAME_COUNT
 };
 
@@ -31,7 +35,6 @@ void fillRect(int x, int y, int w, int h, uint16_t color) {
 }
 
 // --- Draw the game menu ---
-// --- Draw the game menu ---
 void drawMenu() {
   display.clearScreen();
   display.setFont(liberationSans_8ptFontInfo);
@@ -50,7 +53,9 @@ void drawMenu() {
     "Subway Surfer",
     "Maze",
     "Decision Dice",
-    "8-Ball"
+    "8-Ball",
+    "Shooting",
+    "Spin the Wheel",
   };
 
   const int visibleItems = 2; // number of items visible at once
@@ -160,6 +165,21 @@ void loop() {
           run8Ball(display, exitToMenu);
         }
         break;
+
+      case GAME_SHOOTING:
+        setupShooting(display);
+        while (!exitToMenu) {
+          runShooting(display, exitToMenu);
+        }
+        break;
+        
+      case GAME_SPINTHEWHEEL  :
+        setupSpinTheWheel(display);
+        while (!exitToMenu) {
+          runSpinTheWheel(display, exitToMenu);
+        }
+        break;
+
       default:
         display.clearScreen();
         display.setFont(liberationSans_8ptFontInfo);
