@@ -1,13 +1,13 @@
 #include <Wire.h>
 #include <TinyScreen.h>
-#include "src/Subway-Surfer/SubwaySurfer.h"
-#include "src/Maze/Maze.h"
-#include "src/Decision-Dice/DecisionDice.h"
-#include "src/8-Ball/8Ball.h"
-#include "src/Shooting/Shooting.h"
-#include "src/Spin-The-Wheel/SpinTheWheel.h"
+#include "SubwaySurfer.h"
+#include "Maze.h"
+#include "DecisionDice.h"
+#include "8Ball.h"
+#include "Shooting.h"
+#include "SpinTheWheel.h"
 
-TinyScreen display = TinyScreen(TinyScreenDefault);
+TinyScreen display = TinyScreen(TinyScreenPlus);
 
 enum GameSelection {
   GAME_SUBWAY_SURFER,
