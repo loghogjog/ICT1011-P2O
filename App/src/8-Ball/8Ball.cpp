@@ -8,25 +8,25 @@
 
 extern TinyScreen display;
 
-// ---------------- Colors (RGB565) ----------------
+// =============== Colors (RGB565) ===============
 const uint16_t COL_WHITE       = RGB565(255,255,255);
 const uint16_t COL_RING_DIM    = RGB565(150,170,200);
 const uint16_t COL_TEXT_LIGHT  = RGB565(230,234,245);
-const uint16_t COL_TEXT_DARK   = RGB565(30,30,40);
+const uint16_t COL_TEXT_DARK   = RGB565(10,10,10);
 
-// High-contrast triangle fills + text shadows
+// triangle fills + text shadows
 const uint16_t COL_TRI_CLASSIC = RGB565(16,40,96);     // deep navy for Classic
 const uint16_t COL_TRI_INVERT  = RGB565(250,220,120);  // light gold for Inverted
 const uint16_t COL_SHADOW_DARK  = RGB565(10,10,14);
-const uint16_t COL_SHADOW_LIGHT = RGB565(235,240,255);
+const uint16_t COL_SHADOW_LIGHT = RGB565(255,255,255);
 
 // theme
 Theme theme = Classic;
 
-// -------------- Tiny 5x7 transparent font ---------------
-// ASCII 32..90 subset (space..'Z'). Each glyph 5 columns x 7 rows, MSB top.
+// =============== Tiny 5x7 font data ===============
+// ASCII 32..90 subset (from 'space' to 'Z'). Each glyph 5 columns x 7 rows, MSB top.
 const uint8_t FONT5x7[][5] = {
-  // 32 ' ' .. 47 '/'
+  // 32 ' ' to 47 '/'
   {0x00,0x00,0x00,0x00,0x00}, // ' '
   {0x00,0x00,0x5F,0x00,0x00}, // '!'
   {0x00,0x07,0x00,0x07,0x00}, // '"'
@@ -44,7 +44,7 @@ const uint8_t FONT5x7[][5] = {
   {0x00,0x60,0x60,0x00,0x00}, // '.'
   {0x20,0x10,0x08,0x04,0x02}, // '/'
 
-  // 48 '0' .. '9'
+  // 48 '0' to '9'
   {0x3E,0x51,0x49,0x45,0x3E}, // 0
   {0x00,0x42,0x7F,0x40,0x00}, // 1
   {0x42,0x61,0x51,0x49,0x46}, // 2
@@ -56,7 +56,7 @@ const uint8_t FONT5x7[][5] = {
   {0x36,0x49,0x49,0x49,0x36}, // 8
   {0x06,0x49,0x49,0x29,0x1E}, // 9
 
-  // 58 ':' .. 64 '@'
+  // 58 ':' to 64 '@'
   {0x00,0x36,0x36,0x00,0x00}, // ':'
   {0x00,0x56,0x36,0x00,0x00}, // ';'
   {0x08,0x14,0x22,0x41,0x00}, // '<'
@@ -65,7 +65,7 @@ const uint8_t FONT5x7[][5] = {
   {0x02,0x01,0x51,0x09,0x06}, // '?'
   {0x32,0x49,0x79,0x41,0x3E}, // '@'
 
-  // 65 'A' .. 90 'Z'
+  // 65 'A' to 90 'Z'
   {0x7E,0x11,0x11,0x11,0x7E}, // A
   {0x7F,0x49,0x49,0x49,0x36}, // B
   {0x3E,0x41,0x41,0x41,0x22}, // C
@@ -94,31 +94,81 @@ const uint8_t FONT5x7[][5] = {
   {0x61,0x51,0x49,0x45,0x43}  // Z
 };
 
-void drawChar5x7(int x, int y, char c, uint16_t col){
-  if(c < 32 || c > 90) c = '?';
-  const uint8_t* g = FONT5x7[c - 32];
-  for (uint8_t cx=0; cx<5; cx++){
-    uint8_t colBits = g[cx];
-    for (uint8_t cy=0; cy<7; cy++){
-      if (colBits & (1 << cy)){
-        display.drawPixel(x + cx, y + cy, col);
+
+/*
+* font drawing function
+* loops through the 5 columns and 7 rows and draws a pixel
+* if it finds a '1'
+*/
+void drawChar5x7(int x, int y, char character, uint16_t colour){
+  // for any characters outside of font data, draw a '?' instead
+  if(character < 32 || character > 90) 
+  {
+    character = '?';
+  }
+  // since font data (ASCII) starts at 32 ' ' (space), in order to get array index of lets say 'A' (ASCII 65)
+  // we do 65 - 32 = 33. so FONT5x7[33] holds font data for 'A'
+  const uint8_t* charData = FONT5x7[character - 32];
+  // columns
+  for (uint8_t columnIndex=0; columnIndex<5; columnIndex++){
+    uint8_t columnPixelData = charData[columnIndex];
+    // rows
+    for (uint8_t rowIndex=0; rowIndex<7; rowIndex++){
+      // we check if the bit for the current row is '1'.
+      //
+      // (1 << rowIndex) creates a mask that moves one spot up the column each loop:
+      // Loop 1 (rowIndex 0): 0b00000001 (checks the 1st bit)
+      // Loop 2 (rowIndex 1): 0b00000010 (checks the 2nd bit)
+      // Loop 3 (rowIndex 2): 0b00000100 (checks the 3rd bit)
+      // etc.
+      //
+      // The '&' operator checks if 'columnPixelData' has a '1' in that exact spot.
+      if (columnPixelData & (1 << rowIndex))
+      {
+        display.drawPixel(x + columnIndex, y + rowIndex, colour);
       }
     }
   }
 }
-inline int textWidth5x7_fast(const char* s){
-  size_t n = strlen(s);
-  return n ? (int)(n*6 - 1) : 0; // 5 px glyph + 1 px spacing, minus last gap
-}
-void drawString5x7(int x, int y, const char* s, uint16_t col){
-  int cx=x; for(const char* p=s; *p; ++p){ drawChar5x7(cx,y,*p,col); cx+=6; }
-}
-void drawString5x7_shadow(int x, int y, const char* s, uint16_t fg, uint16_t sh){
-  drawString5x7(x+1, y+1, s, sh); // 1 px shadow
-  drawString5x7(x,   y,   s, fg);
+
+/*
+* calculates width of string in pixels (used to center the text later)
+*/
+inline int textWidth5x7_fast(const char* textString){
+  // gets number of characters in the string
+  size_t charCount = strlen(textString);
+  return charCount ? (int)(charCount*6 - 1) : 0; // 5 px character width + 1 px spacing, minus last gap
 }
 
-// ---------------- Answers ----------------
+/*
+* draws the actual characters of the string 
+*/
+void drawString5x7(int x, int y, const char* textString, uint16_t colour) {
+  // set starting point to the 'x' position.
+  int cursorX = x;
+
+  // loop through every character in the textString
+  // until we hit the null terminator ('\0') at the end.
+  for (const char* currentChar = textString; *currentChar != '\0'; currentChar++) {
+
+    // draw the single character that 'currentChar' is pointing to at the current cursor position.
+    // *currentChar is used to get the actual character (e.g 'A').
+    drawChar5x7(cursorX, y, *currentChar, colour);
+
+    // advance the cursor 6 pixels to the right to make room
+    // for the next character (5px for the char + 1px for spacing).
+    cursorX += 6;
+  }
+}
+/*
+* this function draws a shadow for the text
+*/
+void drawString5x7_shadow(int x, int y, const char* textString, uint16_t foregroundColour, uint16_t shadowColour){
+  drawString5x7(x+1, y+1, textString, shadowColour); // draw text FIRST in SHADOW colour at offset to original x.y position
+  drawString5x7(x, y, textString, foregroundColour); // draw text again in FORGROUND colour at original x,y position
+}
+
+// =============== Answers ===============
 const char* ANSWERS[] = {
   "IT IS CERTAIN","IT IS DECIDEDLY SO","WITHOUT A DOUBT","YES DEFINITELY",
   "YOU MAY RELY ON IT","AS I SEE IT YES","MOST LIKELY","OUTLOOK GOOD",
@@ -127,129 +177,219 @@ const char* ANSWERS[] = {
   "DON'T COUNT ON IT","MY REPLY IS NO","MY SOURCES SAY NO",
   "OUTLOOK NOT SO GOOD","VERY DOUBTFUL"
 };
-const uint8_t N_ANS = sizeof(ANSWERS)/sizeof(ANSWERS[0]);
+const uint8_t NUM_ANS = sizeof(ANSWERS)/sizeof(ANSWERS[0]);
 
-// -------------- State --------------
+// =============== State ===============
 bool shaking=false;
 uint32_t shakeStart=0;
 uint16_t shakeDur=800;
 uint8_t ansIdx=0;
 
-// -------------- Fast primitives --------------
-void ringFast(int cx, int cy, int r, uint16_t col){
-  int x = r, y = 0, err = 1 - r;
-  while (x >= y){
-    display.drawPixel(cx + x, cy + y, col);
-    display.drawPixel(cx + y, cy + x, col);
-    display.drawPixel(cx - y, cy + x, col);
-    display.drawPixel(cx - x, cy + y, col);
-    display.drawPixel(cx - x, cy - y, col);
-    display.drawPixel(cx - y, cy - x, col);
-    display.drawPixel(cx + y, cy - x, col);
-    display.drawPixel(cx + x, cy - y, col);
-    y++;
-    if (err < 0) err += 2*y + 1;
-    else { x--; err += 2*(y - x) + 1; }
+// =============== Fast primitives ===============
+
+/*
+* this function draws a circle outline using Bresenham's circle algorithm (faster than drawing with sin/cos)
+*/
+void ringFast(int centerx, int centery, int radius, uint16_t colour){
+  int offsetx = radius;
+  int offsety = 0; 
+  int errorValue = 1 - radius;
+  
+  while (offsetx >= offsety){
+    display.drawPixel(centerx + offsetx, centery + offsety, colour); // Bottom-Right
+    display.drawPixel(centerx + offsety, centery + offsetx, colour); // Bottom-Right (swapped)
+    display.drawPixel(centerx - offsety, centery + offsetx, colour); // Bottom-Left
+    display.drawPixel(centerx - offsetx, centery + offsety, colour); // Bottom-Left (swapped)
+    display.drawPixel(centerx - offsetx, centery - offsety, colour); // Top-Left
+    display.drawPixel(centerx - offsety, centery - offsetx, colour); // Top-Left (swapped)
+    display.drawPixel(centerx + offsety, centery - offsetx, colour); // Top-Right
+    display.drawPixel(centerx + offsetx, centery - offsety, colour); // Top-Right (swapped)
+
+    offsety++;
+
+    if (errorValue < 0) errorValue += 2*offsety + 1;
+    else {
+      offsetx--; 
+      errorValue += 2*(offsety - offsetx) + 1; 
+      }
   }
 }
 
-static inline int xAtY(int x1,int y1,int x2,int y2,int y){
+/*
+* helper function for fillTriangleFast
+*/
+static inline int calculateXOnLine(int x1,int y1,int x2,int y2,int y){
   if (y2 == y1) return x1;
   return x1 + (int)((int32_t)(x2 - x1) * (y - y1) / (y2 - y1));
 }
 
-void fillTriangleFast(int ax,int ay,int bx,int by,int cx,int cy,uint16_t col){
-  if (ay > by){ int t=ay; ay=by; by=t; t=ax; ax=bx; bx=t; }
-  if (by > cy){ int t=by; by=cy; cy=t; t=bx; bx=cx; cx=t; }
-  if (ay > by){ int t=ay; ay=by; by=t; t=ax; ax=bx; bx=t; }
-
-  for (int y = ay; y <= by; ++y){
-    int xl = xAtY(ax,ay,bx,by,y);
-    int xr = xAtY(ax,ay,cx,cy,y);
-    if (xl > xr){ int t=xl; xl=xr; xr=t; }
-    display.drawLine(xl, y, xr, y, col);
+/*
+* this function draws a solid filled-in triangle
+* first finds what point is at the top of the triangle
+* then goes down row by row, identifying the left and right edge of the triangle for that row
+* and draws a fast horizontal line across, between those two edges
+*/
+void fillTriangleFast(int point1_x, int point1_y, int point2_x, int point2_y, int point3_x, int point3_y, uint16_t colour){
+  // sorts points by highest to lowest
+  if (point1_y > point2_y) { 
+    int tempY = point1_y; point1_y = point2_y; point2_y = tempY; 
+    int tempX = point1_x; point1_x = point2_x; point2_x = tempX; 
   }
-  for (int y = by; y <= cy; ++y){
-    int xl = xAtY(bx,by,cx,cy,y);
-    int xr = xAtY(ax,ay,cx,cy,y);
-    if (xl > xr){ int t=xl; xl=xr; xr=t; }
-    display.drawLine(xl, y, xr, y, col);
+  if (point2_y > point3_y) { 
+    int tempY = point2_y; point2_y = point3_y; point3_y = tempY; 
+    int tempX = point2_x; point2_x = point3_x; point3_x = tempX; 
+  }
+  if (point1_y > point2_y) { 
+    int tempY = point1_y; point1_y = point2_y; point2_y = tempY; 
+    int tempX = point1_x; point1_x = point2_x; point2_x = tempX; 
+  }
+
+  for (int currentY = point1_y; currentY <= point2_y; ++currentY) {
+    // calculate the Left and Right edges for this specific row
+    int leftEdgeX = calculateXOnLine(point1_x, point1_y, point2_x, point2_y, currentY); 
+    int rightEdgeX = calculateXOnLine(point1_x, point1_y, point3_x, point3_y, currentY); 
+    
+    // ensure left is actually smaller than right
+    if (leftEdgeX > rightEdgeX) { int temp = leftEdgeX; leftEdgeX = rightEdgeX; rightEdgeX = temp; }
+    
+    // draw the horizontal line
+    display.drawLine(leftEdgeX, currentY, rightEdgeX, currentY, colour);
+  }
+
+  for (int currentY = point2_y; currentY <= point3_y; ++currentY) {
+    int leftEdgeX = calculateXOnLine(point2_x, point2_y, point3_x, point3_y, currentY);
+    int rightEdgeX = calculateXOnLine(point1_x, point1_y, point3_x, point3_y, currentY); 
+
+    if (leftEdgeX > rightEdgeX) { int temp = leftEdgeX; leftEdgeX = rightEdgeX; rightEdgeX = temp; }
+    
+    display.drawLine(leftEdgeX, currentY, rightEdgeX, currentY, colour);
   }
 }
 
-// Word wrap into up to 3 lines inside a max width
-uint8_t wrapLines(const char* src, char out[3][22], uint8_t maxLines, int maxWidth){
-  char buf[96]; strncpy(buf, src, sizeof(buf)-1); buf[sizeof(buf)-1]=0;
-  uint8_t lines=0;
-  char* token = strtok(buf, " ");
-  char line[64]; line[0]=0;
+/*
+* this function breaks the long string into smaller lines that will fit inside the screen
+*/
+uint8_t wrapLines(const char* sourceText, char outputBuffer[3][22], uint8_t maxLines, int maxWidth) {
+  
+  char textBuffer[96]; 
+  strncpy(textBuffer, sourceText, sizeof(textBuffer)-1); 
+  textBuffer[sizeof(textBuffer)-1]=0; 
 
-  while (token){
-    char tryLine[64];
-    if (line[0]==0) {
-      strncpy(tryLine, token, sizeof(tryLine)-1); tryLine[sizeof(tryLine)-1]=0;
+  uint8_t lineCount = 0;
+  char currentLine[64]; 
+  currentLine[0] = 0; // start with an empty line
+
+  // strtok splits the text into words (tokens) at every space " "
+  char* currentWord = strtok(textBuffer, " ");
+
+  // Loop through every word found
+  while (currentWord) {
+    char testLine[64];
+
+    if (currentLine[0] == 0) {
+      strncpy(testLine, currentWord, sizeof(testLine)-1);
     } else {
-      snprintf(tryLine, sizeof(tryLine), "%s %s", line, token);
-      tryLine[sizeof(tryLine)-1]=0;
+      snprintf(testLine, sizeof(testLine), "%s %s", currentLine, currentWord);
     }
-    if (textWidth5x7_fast(tryLine) <= maxWidth){
-      strncpy(line, tryLine, sizeof(line)-1); line[sizeof(line)-1]=0;
+    
+    if (textWidth5x7_fast(testLine) <= maxWidth) {
+      strncpy(currentLine, testLine, sizeof(currentLine)-1);
     } else {
-      if (lines < maxLines){
-        strncpy(out[lines], line, 21); out[lines][21]=0;
-        lines++; line[0]=0;
-        strncpy(line, token, sizeof(line)-1); line[sizeof(line)-1]=0;
+      if (lineCount < maxLines) {
+        strncpy(outputBuffer[lineCount], currentLine, 21); 
+        outputBuffer[lineCount][21] = 0;
+        lineCount++;
       }
+      strncpy(currentLine, currentWord, sizeof(currentLine)-1); 
     }
-    token = strtok(NULL, " ");
+    
+    currentWord = strtok(NULL, " ");
   }
-  if (line[0] && lines < maxLines){
-    strncpy(out[lines], line, 21); out[lines][21]=0; lines++;
+
+  if (currentLine[0] && lineCount < maxLines) {
+    strncpy(outputBuffer[lineCount], currentLine, 21); 
+    outputBuffer[lineCount][21] = 0; 
+    lineCount++;
   }
-  return lines;
+
+  return lineCount; 
 }
 
-// -------------- Shake --------------
+// =============== Shaking Animation ===============
+
+/*
+* precalculate the values of a sine wave
+*/
 const int8_t SIN32[32] = {
-   0,  8, 16, 23, 29, 33, 36, 38,
+   0,  8, 16, 23, 29, 33, 36, 38, 
   39, 38, 36, 33, 29, 23, 16,  8,
    0, -8,-16,-23,-29,-33,-36,-38,
  -39,-38,-36,-33,-29,-23,-16, -8
 };
 
+/*
+* just sets the stopwatch
+*/
 void startShake(){
   shaking = true; shakeStart = millis();
 }
-void updateShake(){
-  uint32_t t = millis() - shakeStart;
-  if (t >= shakeDur){
+
+/*
+* main function that handles the wobble animation of the ball
+*/
+void updateShake() {
+  // tells you how long you have been shaking
+  uint32_t timeElapsed = millis() - shakeStart;
+
+  // if we have exceeded the shake duration (800ms), stop shaking and pick an answer.
+  if (timeElapsed >= shakeDur) {
     shaking = false;
-    ansIdx = random(N_ANS);
-    drawAnswer();
+    
+    // pick a random answer index
+    ansIdx = random(NUM_ANS); 
+    
+    drawAnswer(); // switch to the answer screen
     return;
   }
 
-  // Smooth, decaying wobble
-  const uint8_t speedPhase = 4; 
-  uint8_t phase = (uint8_t)((t * speedPhase) >> 5) & 31;
+  // cycle through the 32-step SINE32 lookup table
+  // '>> 5' is a fast way to divide by 32. 
+  // '& 31' is a fast way to say mod 32 (keeps the number between 0-31).s
+  const uint8_t speedMultiplier = 4; 
+  uint8_t phaseIndex = (uint8_t)((timeElapsed * speedMultiplier) >> 5) & 31;
 
-  const int16_t maxAmp = 8;  
-  const int16_t minAmp = 2;   
-  int16_t amp = maxAmp - (int32_t)(maxAmp - minAmp) * t / shakeDur;
+  // shake starts violent (maxAmplitude) and end gently (minAmplitude)
+  const int16_t maxAmplitude = 8;  
+  const int16_t minAmplitude = 2;   
+  
+  // this reduces amplitude as time duration increases
+  int16_t currentAmp = maxAmplitude - (int32_t)(maxAmplitude - minAmplitude) * timeElapsed / shakeDur;
 
-  int dx = (amp * SIN32[phase]) / 40;
-  int dy = (amp * SIN32[(phase + 8) & 31]) / 40;
+  // Get the sine value (-40 to 40) from our table, multiply by intensity, scale down.
+  // We offset 'dy' by 8 steps in the table to make it out of sync with 'dx' (circular motion).
+  int offsetX = (currentAmp * SIN32[phaseIndex]) / 40;
+  int offsetY = (currentAmp * SIN32[(phaseIndex + 8) & 31]) / 40;
 
-  // Parallax for inner window/8
-  int inx = -dx / 2;
-  int iny = -dy / 2;
 
-  display.clearScreen();
-  ringFast(48 + dx, 32 + dy, 26, COL_RING_DIM);
-  ringFast(48 + inx, 26 + iny, 11,
-           (theme==Classic)? RGB565(210,220,235) : RGB565(40,40,40));
-  uint16_t eightCol = (theme==Classic)? COL_TEXT_LIGHT : COL_TEXT_DARK;
-  drawChar5x7(48 - 3 + inx, 26 - 3 + iny, '8', eightCol);
+  // to make it look like liquid, the inner '8' moves in the OPPOSITE direction
+  // and slightly less distance than the outer ring.
+  int innerOffsetX = -offsetX / 2;
+  int innerOffsetY = -offsetY / 2;
+
+  // clear frame
+  display.clearScreen(); 
+
+  // draw outer ring
+  ringFast(48 + offsetX, 32 + offsetY, 26, COL_RING_DIM);
+
+  // draw Inner Ring/Window (Moved opposite way)
+  // determine color based on theme
+  uint16_t windowColor = (theme == Classic) ? COL_TRI_CLASSIC : COL_TRI_INVERT;
+  ringFast(48 + innerOffsetX, 26 + innerOffsetY, 11, windowColor);
+
+  // Draw the '8' inside the window
+  uint16_t eightColor = (theme == Classic) ? COL_TEXT_LIGHT : COL_TEXT_DARK;
+  drawChar5x7(48 - 3 + innerOffsetX, 26 - 3 + innerOffsetY, '8', eightColor);
 }
 
 // -------------- Draw screens --------------
@@ -305,7 +445,9 @@ void drawAnswer(){
 #define BTN_LL TSButtonLowerLeft
 #define BTN_LR TSButtonLowerRight
 
-uint8_t read8BallButtons(){ return display.getButtons(); }
+uint8_t read8BallButtons(){ 
+  return display.getButtons(); 
+  }
 
 // -------------- Arduino --------------
 void setup8Ball(TinyScreen &display){
@@ -320,10 +462,10 @@ void setup8Ball(TinyScreen &display){
 void run8Ball(TinyScreen &display, bool &exitToMenu){
   uint8_t b = read8BallButtons();
 
-  if (b & BTN_UR){           // Ask -> shake, then answer
+  if (b & BTN_UR){           // shake
     if (!shaking){ startShake(); }
   }
-  if (b & BTN_UL){           // Reset
+  if (b & BTN_UL){           // reset
     shaking=false; drawIdle();
   }
   if (b & BTN_LR){           // Theme toggle
@@ -332,7 +474,7 @@ void run8Ball(TinyScreen &display, bool &exitToMenu){
     delay(200); // debounce
   }
   
-  if (b & BTN_LL){           // Return to app menu
+  if (b & BTN_LL){           // return to app menu
     exitToMenu = true;  // signal to exit to main menu
 
   }
