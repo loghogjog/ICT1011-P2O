@@ -312,12 +312,16 @@ void runGame() {
     // --- Read accelerometer using working library method ---
     accel.read(); // MUST call this
     static float smoothX = 0, smoothY = 0;
-    smoothX = (smoothX * 0.8) + (accel.X * 0.2); // smooth tilt
-    smoothY = (smoothY * 0.8) + (accel.Y * 0.2);
+    smoothX = (smoothX * 0.8f) + (accel.X * 0.2f); // smooth tilt
+    smoothY = (smoothY * 0.8f) + (accel.Y * 0.2f);
+
+    // --- Axis sign constants
+    const float AXIS_SIGN_X = -1.0f; // -1.0 so that X movement is inverted
+    const float AXIS_SIGN_Y = -1.0f; 
 
     // --- Apply acceleration ---
-    ballVelX += smoothX * ACCEL_SCALE; // tilt Y moves X
-    ballVelY -= smoothY * ACCEL_SCALE; // tilt X moves Y
+    ballVelX += (AXIS_SIGN_X * smoothX) * ACCEL_SCALE; // tilt X moves X
+    ballVelY -= (AXIS_SIGN_Y * smoothY) * ACCEL_SCALE; // tilt Y moves Y
 
     // --- Friction ---
     ballVelX *= FRICTION;
