@@ -320,8 +320,8 @@ void runGame() {
     const float AXIS_SIGN_Y = -1.0f; 
 
     // --- Apply acceleration ---
-    ballVelX += (AXIS_SIGN_X * smoothX) * ACCEL_SCALE; // tilt X moves X
-    ballVelY -= (AXIS_SIGN_Y * smoothY) * ACCEL_SCALE; // tilt Y moves Y
+    ballVelX += (AXIS_SIGN_X * smoothY) * ACCEL_SCALE; // tilt X moves Y
+    ballVelY -= (AXIS_SIGN_Y * smoothX) * ACCEL_SCALE; // tilt Y moves X
 
     // --- Friction ---
     ballVelX *= FRICTION;
@@ -340,14 +340,9 @@ void runGame() {
     if(!checkCollision(ballX, newY)) ballY = newY; else ballVelY = 0;
 
     // --- Check exit ---
-    int gridX = (int)(ballX / CELL_SIZE + 0.5);
-    int gridY = (int)(ballY / CELL_SIZE + 0.5);
-    if(gridX >= 0 && gridX < MAZE_WIDTH && gridY >= 0 && gridY < MAZE_HEIGHT) {
-        uint8_t cell = *((currentMaze + gridY * MAZE_WIDTH) + gridX);
-        if(cell == 2) {
-            currentState = LEVEL_COMPLETE;
-            return;
-        }
+    if(checkExitOverlap(ballX, ballY)) {
+    currentState = LEVEL_COMPLETE;
+    return;
     }
 
     // --- Draw ball ---
@@ -403,6 +398,48 @@ bool checkCollision(float x, float y) {
     }
   }
   
+  return false;
+}
+
+bool checkExitOverlap(float x, float y) {
+  // 1) Quick center-cell check (fast path)
+  int centerGX = (int)(x / CELL_SIZE);
+  int centerGY = (int)(y / CELL_SIZE);
+  if(centerGX >= 0 && centerGX < MAZE_WIDTH && centerGY >= 0 && centerGY < MAZE_HEIGHT) {
+    if(*((currentMaze + centerGY * MAZE_WIDTH) + centerGX) == 2) return true;
+  }
+
+  // 2) Bounding-box scan (covers partial overlaps)
+  int minGX = (int)floor((x - BALL_RADIUS) / CELL_SIZE);
+  int maxGX = (int)floor((x + BALL_RADIUS) / CELL_SIZE);
+  int minGY = (int)floor((y - BALL_RADIUS) / CELL_SIZE);
+  int maxGY = (int)floor((y + BALL_RADIUS) / CELL_SIZE);
+
+  // clamp to maze bounds
+  if(minGX < 0) minGX = 0;
+  if(minGY < 0) minGY = 0;
+  if(maxGX >= MAZE_WIDTH)  maxGX = MAZE_WIDTH - 1;
+  if(maxGY >= MAZE_HEIGHT) maxGY = MAZE_HEIGHT - 1;
+
+  for(int gy = minGY; gy <= maxGY; gy++) {
+    for(int gx = minGX; gx <= maxGX; gx++) {
+      if(*((currentMaze + gy * MAZE_WIDTH) + gx) == 2) return true;
+    }
+  }
+
+  // 3) Perimeter sampling — detect if any point on the ball's circumference lies in an exit cell.
+  const int checkPoints = 12; // more samples -> more sensitive
+  for(int i = 0; i < checkPoints; i++) {
+    float angle = (i * 2.0f * PI) / checkPoints;
+    float checkX = x + cos(angle) * BALL_RADIUS;
+    float checkY = y + sin(angle) * BALL_RADIUS;
+    int gx = (int)(checkX / CELL_SIZE);
+    int gy = (int)(checkY / CELL_SIZE);
+    if(gx >= 0 && gx < MAZE_WIDTH && gy >= 0 && gy < MAZE_HEIGHT) {
+      if(*((currentMaze + gy * MAZE_WIDTH) + gx) == 2) return true;
+    }
+  }
+
   return false;
 }
 

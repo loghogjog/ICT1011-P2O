@@ -44,5 +44,6 @@ bool checkCollision(float x, float y);
 void drawMaze();
 void showLevelComplete();
 void showGameOver();
+bool checkExitOverlap(float x, float y);
 
 #endif
