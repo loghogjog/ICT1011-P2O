@@ -402,14 +402,14 @@ bool checkCollision(float x, float y) {
 }
 
 bool checkExitOverlap(float x, float y) {
-  // 1) Quick center-cell check (fast path)
+  // Quick center-cell check (fast path)
   int centerGX = (int)(x / CELL_SIZE);
   int centerGY = (int)(y / CELL_SIZE);
   if(centerGX >= 0 && centerGX < MAZE_WIDTH && centerGY >= 0 && centerGY < MAZE_HEIGHT) {
     if(*((currentMaze + centerGY * MAZE_WIDTH) + centerGX) == 2) return true;
   }
 
-  // 2) Bounding-box scan (covers partial overlaps)
+  // Bounding-box scan (covers partial overlaps)
   int minGX = (int)floor((x - BALL_RADIUS) / CELL_SIZE);
   int maxGX = (int)floor((x + BALL_RADIUS) / CELL_SIZE);
   int minGY = (int)floor((y - BALL_RADIUS) / CELL_SIZE);
@@ -427,7 +427,7 @@ bool checkExitOverlap(float x, float y) {
     }
   }
 
-  // 3) Perimeter sampling — detect if any point on the ball's circumference lies in an exit cell.
+  // Perimeter sampling — detect if any point on the ball's circumference lies in an exit cell.
   const int checkPoints = 12; // more samples -> more sensitive
   for(int i = 0; i < checkPoints; i++) {
     float angle = (i * 2.0f * PI) / checkPoints;
